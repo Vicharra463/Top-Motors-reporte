@@ -524,16 +524,21 @@ db = { doc(path){
   return {
     async set(data){
       const payload = JSON.stringify(Object.assign({mes}, data));
-      const send = m => jfetch("/api/stock", {method: m, headers:{"Content-Type":"application/json"}, body: payload});
-      let r = null; let netErr = null;
-      try{ r = await send("PUT"); }catch(e){ netErr = e; }
-      if(!r || r.status === 405 || r.status === 501){ try{ r = await send("POST"); }catch(e){ throw netErr || e; } }
-      if(!r.ok){
+      let method = "PUT", lastErr = null;
+      for(let i = 0; i < 3; i++){
+        if(i) await new Promise(r => setTimeout(r, i === 1 ? 800 : 2500));
+        let r = null;
+        try{ r = await jfetch("/api/stock", {method, headers:{"Content-Type":"application/json"}, body: payload}); }
+        catch(e){ lastErr = e; continue; }
+        if(r.ok){ stockLoads.forEach(load => load()); return; }
+        if(r.status === 405 || r.status === 501){ method = "POST"; lastErr = Object.assign(new Error("save"), {detail: "HTTP " + r.status}); continue; }
         let extra = "";
         try{ const d = await r.json(); if(d && d.error) extra = " — " + d.error; }catch(e){}
-        throw Object.assign(new Error("save"), {detail: "HTTP " + r.status + extra});
+        lastErr = Object.assign(new Error("save"), {detail: "HTTP " + r.status + extra});
+        if(r.status >= 500 || r.status === 408 || r.status === 429) continue;
+        throw lastErr;
       }
-      stockLoads.forEach(load => load());
+      throw lastErr || new Error("save");
     },
     onSnapshot(cb, eb){
       let alive = true;

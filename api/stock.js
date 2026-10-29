@@ -13,9 +13,14 @@ function publicUrl(shortId, pathname) {
 module.exports = async (req, res) => {
   const { searchParams } = new URL(req.url, "http://localhost");
   let mes = searchParams.get("mes");
-  if (!mes && req.method === "PUT") {
-    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    mes = body.mes;
+  if (!mes && (req.method === "PUT" || req.method === "POST")) {
+    try {
+      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      mes = body && body.mes;
+    } catch (e) {
+      res.status(400).json({ error: "Body inválido: se esperaba JSON con mes AAAA-MM." });
+      return;
+    }
   }
   if (!mes || !/^\d{4}-\d{2}$/.test(mes)) {
     res.status(400).json({ error: "mes inválido (usa AAAA-MM)" });
