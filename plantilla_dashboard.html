@@ -1,5 +1,4 @@
 <title>Facturación y Anticipos Motos</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Poppins:wght@400;500;600&display=swap">
 <style>
@@ -361,20 +360,16 @@ function renderVin(){
 renderVin();
 
 /* Excel */
-let dl = null; const inViewer = !!window.claude;
 const xlsBtns = ["xls","axls"];
 if(typeof XLSX === "undefined") xlsBtns.forEach(id => $(id).hidden = true);
-if(inViewer) window.claude.use("downloads").then(d => { dl = d; if(!d) xlsBtns.forEach(id => $(id).hidden = true); });
 async function saveXlsx(btn, msg, sheet, head, rows, widths, moneyCols, filename){
   const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
   ws["!cols"] = widths.map(w=>({wch:w}));
   moneyCols.forEach(col => { for(let i=2;i<=rows.length+1;i++){ const c = ws[col+i]; if(c && typeof c.v==="number") c.z = "#,##0.00"; } });
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, sheet);
-  if(!inViewer){ XLSX.writeFile(wb, filename); return; }
-  if(!dl){ msg.textContent = "La descarga no está disponible en esta vista."; return; }
-  btn.disabled = true; msg.textContent = "Confirma la descarga…";
-  try{ await dl.save({filename, data: XLSX.write(wb, {bookType:"xlsx", type:"array"})}); msg.textContent = "Excel descargado."; }
-  catch(e){ msg.textContent = e && e.code === "declined" ? "Descarga cancelada." : e && e.code === "rate_limited" ? "Espera un momento e inténtalo de nuevo." : "No se pudo descargar el Excel."; }
+  btn.disabled = true; msg.textContent = "Generando Excel…";
+  try{ XLSX.writeFile(wb, filename); msg.textContent = "Excel descargado."; }
+  catch(e){ msg.textContent = "No se pudo descargar el Excel."; }
   finally{ btn.disabled = false; }
 }
 $("xls").addEventListener("click", () => {
@@ -447,7 +442,7 @@ function renderSec(){
   $("a-sal").textContent = usd(S); $("a-sals").textContent = (V? pc(S/V):"0.0%") + " del valor neto · " + sum(pend,"motos") + " motos con saldo";
   $("a-proy-t").textContent = "Saldo proyectado · " + mesLbl($("pm").value);
   $("a-proy").textContent = dbOk ? usd(P) : "—";
-  $("a-proys").textContent = !dbOk ? (inViewer ? "Ingresa con tu cuenta de Claude para ver la proyección" : "Conecta el almacén de stock (Vercel Blob) para ver la proyección")
+  $("a-proys").textContent = !dbOk ? "Conecta el almacén de stock (Vercel Blob) para ver la proyección"
     : prog.length ? `${S? pc(P/S):"0.0%"} del saldo total · ${progPend.length} cliente${progPend.length===1?"":"s"} programado${progPend.length===1?"":"s"}${progPaid.length?` · ${progPaid.length} ya pagado${progPaid.length===1?"":"s"}`:""}`
     : "Sin stock HDP ingresado para este mes";
   $("gcount").textContent = `${B.length} de ${A.length} pedidos`;
@@ -487,7 +482,7 @@ function renderEditor(){
     cs.map(c => { const id = "stk-" + c.k.replace(/[^\w]+/g,"_");
       return `<label class="stk-row" for="${id}"><span>${esc(c.color)}</span><span class="w">${c.n} cliente${c.n===1?"":"s"}</span><input id="${id}" type="number" min="0" step="1" inputmode="numeric" data-k="${esc(c.k)}" value="${stock[c.k]??""}" placeholder="0" ${dis}></label>`; }).join("") + `</div>`).join("");
   $("stk-save").hidden = !!dis;
-  $("stk-note").textContent = !dbOk ? (inViewer ? "Disponible al abrir la página con tu cuenta de Claude" : "Almacén de stock no conectado · ver README")
+  $("stk-note").textContent = !dbOk ? "Almacén de stock no conectado · ver README"
     : canWrite === false ? "Solo lectura: pide permiso de edición al dueño del reporte"
     : stockMeta && stockMeta.updatedAt ? "Última actualización: " + new Date(stockMeta.updatedAt).toLocaleString("es-PE",{dateStyle:"short",timeStyle:"short"}) : "Aún no se ingresó stock para este mes";
 }
@@ -518,31 +513,26 @@ function watchMonth(){
 }
 $("pm").addEventListener("input", () => { watchMonth(); if(!$("stk-panel").hidden) renderEditor(); });
 renderSec();
-if(window.claude && window.claude.use){
-  window.claude.use("db").then(d => { db = d; dbOk = !!d; if(d) watchMonth(); else renderSec(); });
-  window.claude.use("user").then(u => { if(u && u.can) u.can("data.write").then(v => { canWrite = v; if(!$("stk-panel").hidden) renderEditor(); }); });
-} else {
-  /* Fuera de Claude (Vercel): stock compartido vía /api/stock (Vercel Blob) */
-  db = { doc(path){
-    const mes = path.replace(/^stock\//, "");
-    return {
-      async set(data){
-        const r = await fetch("/api/stock", {method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(Object.assign({mes}, data))});
-        if(!r.ok) throw new Error("save");
-      },
-      onSnapshot(cb, eb){
-        let alive = true;
-        fetch("/api/stock?mes=" + encodeURIComponent(mes))
-          .then(r => { if(!r.ok) throw new Error("http"); return r.json(); })
-          .then(d => { if(alive) cb({exists: !!(d && d.updatedAt), data: () => d}); })
-          .catch(() => { if(alive && eb) eb(); });
-        return () => { alive = false; };
-      }
-    };
-  }};
-  dbOk = true; canWrite = true;
-  watchMonth();
-}
+/* Stock compartido: /api/stock (Vercel Blob) */
+db = { doc(path){
+  const mes = path.replace(/^stock\//, "");
+  return {
+    async set(data){
+      const r = await fetch("/api/stock", {method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(Object.assign({mes}, data))});
+      if(!r.ok) throw new Error("save");
+    },
+    onSnapshot(cb, eb){
+      let alive = true;
+      fetch("/api/stock?mes=" + encodeURIComponent(mes))
+        .then(r => { if(!r.ok) throw new Error("http"); return r.json(); })
+        .then(d => { if(alive) cb({exists: !!(d && d.updatedAt), data: () => d}); })
+        .catch(() => { if(alive && eb) eb(); });
+      return () => { alive = false; };
+    }
+  };
+}};
+dbOk = true; canWrite = true;
+watchMonth();
 
 /* ===== CRITERIOS ===== */
 $("obs").innerHTML = DATA.obs.map(o => `<div class="obs-item"><h3>${esc(o.t)}</h3><p>${o.h}</p></div>`).join("");
