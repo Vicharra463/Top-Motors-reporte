@@ -413,7 +413,7 @@ const mesLbl = k => MESES[+k.slice(5)-1] + " " + k.slice(0,4);
   $("pm").innerHTML = ms.map(k=>`<option value="${k}">${mesLbl(k)}</option>`).join(""); }
 
 /* stock: { "MODELO|Color": unidades } del mes elegido */
-let stock = {}, stockMeta = null, dbRef = null, unsub = null, canWrite = null, dbOk = false;
+let stock = {}, stockMeta = null, dbRef = null, unsub = null, canWrite = null, dbOk = false, stkDirty = false;
 function asignar(){
   A.forEach(r => { r.u = 0; r.proy = 0; });
   const grupos = group([...A].sort((x,y)=>x.iso.localeCompare(y.iso) || x.ped-y.ped), key);
@@ -490,7 +490,7 @@ function renderEditor(){
 function openEditor(on){ $("stk-panel").hidden = !on; $("stk-open").setAttribute("aria-expanded", on); if(on){ renderEditor(); $("stk-msg").textContent=""; } }
 $("stk-open").addEventListener("click", () => openEditor($("stk-panel").hidden));
 $("stk-close").addEventListener("click", () => openEditor(false));
-$("stk-grid").addEventListener("input", e => { const inp = e.target.closest("input[data-k]"); if(!inp) return; $("stk-msg").textContent = "Cambios sin guardar"; });
+$("stk-grid").addEventListener("input", e => { const inp = e.target.closest("input[data-k]"); if(!inp) return; stkDirty = true; $("stk-msg").textContent = "Cambios sin guardar"; });
 function stockAlert(o){
   if(typeof Swal !== "undefined") return Swal.fire(o);
   $("stk-msg").textContent = (o.title || "") + (o.text ? " — " + o.text : "");
@@ -502,7 +502,7 @@ $("stk-save").addEventListener("click", async () => {
   document.querySelectorAll("#stk-grid input[data-k]").forEach(inp => { const v = Math.max(0, Math.floor(+inp.value || 0)); if(v) items[inp.dataset.k] = v; });
   const btn = $("stk-save"); btn.disabled = true; $("stk-msg").textContent = "";
   stockAlert({title:"Guardando stock…", allowOutsideClick:false, allowEscapeKey:false, didOpen:() => { if(typeof Swal !== "undefined") Swal.showLoading(); }});
-  try{ await dbRef.set({mes: $("pm").value, items, updatedAt: new Date().toISOString()});
+  try{ await dbRef.set({mes: $("pm").value, items, updatedAt: new Date().toISOString()}); stkDirty = false;
     stockAlert({icon:"success", title:"Stock guardado", text:"La proyección ya está actualizada.", timer:2200, showConfirmButton:false}); }
   catch(e){ if(e && e.code === "invalid_argument"){ canWrite = false; renderEditor(); stockAlert({icon:"warning", title:"Sin permiso", text:"No tienes permiso para guardar el stock."}); }
     else stockAlert({icon:"error", title:"No se pudo guardar", text: (e && e.detail) ? e.detail : (e && e.name === "AbortError" ? "Sin respuesta del servidor (timeout)." : "Inténtalo de nuevo.")}); }
@@ -517,10 +517,10 @@ function watchMonth(){
   unsub = dbRef.onSnapshot(snap => {
     const d = snap.exists ? snap.data() : null;
     stock = d && d.items ? {...d.items} : {}; stockMeta = d;
-    renderSec(); if(!$("stk-panel").hidden && !document.activeElement?.closest?.("#stk-grid")) renderEditor();
+    renderSec(); if(!$("stk-panel").hidden && !stkDirty && !document.activeElement?.closest?.("#stk-grid")) renderEditor();
   }, () => { dbOk = false; renderSec(); });
 }
-$("pm").addEventListener("input", () => { watchMonth(); if(!$("stk-panel").hidden) renderEditor(); });
+$("pm").addEventListener("input", () => { stkDirty = false; watchMonth(); if(!$("stk-panel").hidden) renderEditor(); });
 renderSec();
 /* Stock compartido: /api/stock (Vercel Blob) */
 const stockLoads = new Set();
@@ -550,12 +550,13 @@ db = { doc(path){
       throw lastErr || new Error("save");
     },
     onSnapshot(cb, eb){
-      let alive = true;
+      let alive = true, seq = 0;
       const load = () => {
+        const my = ++seq;
         jfetch("/api/stock?mes=" + encodeURIComponent(mes), {}, 15000)
           .then(r => { if(!r.ok) throw new Error("http"); return r.json(); })
-          .then(d => { if(alive){ dbOk = true; cb({exists: !!(d && d.updatedAt), data: () => d}); } })
-          .catch(() => { if(alive && eb) eb(); });
+          .then(d => { if(alive && my === seq){ dbOk = true; cb({exists: !!(d && d.updatedAt), data: () => d}); } })
+          .catch(() => { if(alive && my === seq && eb) eb(); });
       };
       load();
       const timer = setInterval(load, 8000);
