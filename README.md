@@ -66,3 +66,5 @@ PROMPT_MAESTRO.md         ← reglas de negocio
 
 - Facturación: **1,471 motos · US$ 4,562,293.57**
 - Anticipos: **94 motos en 92 pedidos · saldo US$ 343,419.17 · 15 cobradas al 100%**
+
+<!-- rebuild -->
