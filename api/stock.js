@@ -67,6 +67,8 @@ module.exports = async (req, res) => {
           authorization: "Bearer " + TOKEN,
           "x-vercel-blob-store-id": "store_" + shortId,
           "x-api-version": "13",
+          "x-allow-overwrite": "1",
+          "x-add-random-suffix": "0",
           "content-type": "application/json",
         },
         body: JSON.stringify(doc),

@@ -1,5 +1,6 @@
 <title>Facturación y Anticipos Motos</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Poppins:wght@400;500;600&display=swap">
 <style>
 /* Layout: report sheet — sticky section nav, summary strip, then each block (facturación, anticipos, observaciones) */
@@ -490,13 +491,21 @@ function openEditor(on){ $("stk-panel").hidden = !on; $("stk-open").setAttribute
 $("stk-open").addEventListener("click", () => openEditor($("stk-panel").hidden));
 $("stk-close").addEventListener("click", () => openEditor(false));
 $("stk-grid").addEventListener("input", e => { const inp = e.target.closest("input[data-k]"); if(!inp) return; $("stk-msg").textContent = "Cambios sin guardar"; });
+function stockAlert(o){
+  if(typeof Swal !== "undefined") return Swal.fire(o);
+  $("stk-msg").textContent = (o.title || "") + (o.text ? " — " + o.text : "");
+  return Promise.resolve();
+}
 $("stk-save").addEventListener("click", async () => {
-  if(!dbRef){ $("stk-msg").textContent = "Recargá la página (Ctrl+Shift+R) e intentá de nuevo."; return; }
+  if(!dbRef){ stockAlert({icon:"warning", title:"Recargá la página", text:"Ctrl+Shift+R e intentá de nuevo."}); return; }
   const items = {};
   document.querySelectorAll("#stk-grid input[data-k]").forEach(inp => { const v = Math.max(0, Math.floor(+inp.value || 0)); if(v) items[inp.dataset.k] = v; });
-  const btn = $("stk-save"); btn.disabled = true; $("stk-msg").textContent = "Guardando…";
-  try{ await dbRef.set({mes: $("pm").value, items, updatedAt: new Date().toISOString()}); $("stk-msg").textContent = "Stock guardado. La proyección ya está actualizada."; }
-  catch(e){ if(e && e.code === "invalid_argument"){ canWrite = false; renderEditor(); $("stk-msg").textContent = "No tienes permiso para guardar el stock."; } else $("stk-msg").textContent = "No se pudo guardar" + (e && e.detail ? " (" + e.detail + ")" : e && e.name === "AbortError" ? " (sin respuesta — timeout)" : ". Inténtalo de nuevo."); }
+  const btn = $("stk-save"); btn.disabled = true; $("stk-msg").textContent = "";
+  stockAlert({title:"Guardando stock…", allowOutsideClick:false, allowEscapeKey:false, didOpen:() => { if(typeof Swal !== "undefined") Swal.showLoading(); }});
+  try{ await dbRef.set({mes: $("pm").value, items, updatedAt: new Date().toISOString()});
+    stockAlert({icon:"success", title:"Stock guardado", text:"La proyección ya está actualizada.", timer:2200, showConfirmButton:false}); }
+  catch(e){ if(e && e.code === "invalid_argument"){ canWrite = false; renderEditor(); stockAlert({icon:"warning", title:"Sin permiso", text:"No tienes permiso para guardar el stock."}); }
+    else stockAlert({icon:"error", title:"No se pudo guardar", text: (e && e.detail) ? e.detail : (e && e.name === "AbortError" ? "Sin respuesta del servidor (timeout)." : "Inténtalo de nuevo.")}); }
   finally{ btn.disabled = false; }
 });
 let db = null;
