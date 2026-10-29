@@ -1,6 +1,14 @@
-const { head, put } = require("@vercel/blob");
+const TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "";
+const API = "https://vercel.com/api/blob/";
 
-const MES_RE = /^\d{4}-\d{2}$/;
+function parseStoreId(token) {
+  const m = /^vercel_blob_rw_([A-Za-z0-9]+)_/.exec(token);
+  return m ? m[1] : null;
+}
+
+function publicUrl(shortId, pathname) {
+  return `https://${shortId.toLowerCase()}.public.blob.vercel-storage.com/${pathname}`;
+}
 
 module.exports = async (req, res) => {
   const { searchParams } = new URL(req.url, "http://localhost");
@@ -9,23 +17,31 @@ module.exports = async (req, res) => {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     mes = body.mes;
   }
-  if (!mes || !MES_RE.test(mes)) {
+  if (!mes || !/^\d{4}-\d{2}$/.test(mes)) {
     res.status(400).json({ error: "mes inválido (usa AAAA-MM)" });
     return;
   }
-  const path = `stock/${mes}.json`;
+  const pathname = `stock/${mes}.json`;
+  const shortId = parseStoreId(TOKEN);
+  if (!shortId) {
+    res.status(500).json({ error: "Almacén Blob no conectado. Sigue el README: Storage → Create Blob → Connect to Project." });
+    return;
+  }
 
   if (req.method === "GET") {
     try {
-      const meta = await head(path);
-      if (!meta) {
+      const r = await fetch(publicUrl(shortId, pathname));
+      if (r.status === 404) {
         res.json({ mes, items: {}, updatedAt: null });
         return;
       }
-      const txt = await (await fetch(meta.url)).text();
-      res.json(JSON.parse(txt));
+      if (!r.ok) {
+        res.status(502).json({ error: "No se pudo leer el stock (" + r.status + ")." });
+        return;
+      }
+      res.json(JSON.parse(await r.text()));
     } catch (e) {
-      res.status(500).json({ error: "No se pudo leer el stock. ¿Está conectado el almacén Blob en Vercel?" });
+      res.status(500).json({ error: "No se pudo leer el stock." });
     }
     return;
   }
@@ -40,10 +56,23 @@ module.exports = async (req, res) => {
         if (n && k.length <= 80) clean[k] = n;
       }
       const doc = { mes, items: clean, updatedAt: new Date().toISOString() };
-      await put(path, JSON.stringify(doc), { access: "public", allowOverwrite: true });
+      const r = await fetch(API + "?pathname=" + encodeURIComponent(pathname), {
+        method: "PUT",
+        headers: {
+          authorization: "Bearer " + TOKEN,
+          "x-vercel-blob-store-id": "store_" + shortId,
+          "x-api-version": "13",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(doc),
+      });
+      if (!r.ok) {
+        res.status(502).json({ error: "No se pudo guardar (" + r.status + ")." });
+        return;
+      }
       res.json(doc);
     } catch (e) {
-      res.status(500).json({ error: "No se pudo guardar. ¿Está conectado el almacén Blob en Vercel?" });
+      res.status(500).json({ error: "No se pudo guardar." });
     }
     return;
   }
