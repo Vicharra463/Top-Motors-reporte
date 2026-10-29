@@ -175,11 +175,19 @@ tfoot td{font-weight:700;border-top:2px solid var(--ink);border-bottom:0;backgro
 .stk-mod{border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .stk-mod h4{margin:0;font-family:var(--f-display);font-size:16px;display:flex;justify-content:space-between;gap:8px}
 .stk-mod h4 small{font-family:var(--f-body);font-size:12px;color:var(--muted);font-weight:500}
-.stk-row{display:grid;grid-template-columns:1fr auto 64px;gap:8px;align-items:center;font-size:13px}
+.stk-row{display:grid;grid-template-columns:1fr 64px;gap:8px;align-items:center;font-size:13px}
 .stk-row .w{color:var(--muted);font-size:12px;white-space:nowrap}
 .stk-row input{font:inherit;font-size:14px;width:64px;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);text-align:right}
 .stk-row input:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
 .stk-row input:disabled{background:var(--sunk)}
+.stk-body{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px;align-items:start}
+.stk-side{border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.stk-side h4{margin:0 0 8px;font-family:var(--f-display);font-size:14px}
+.stk-live{width:100%;border-collapse:collapse;font-size:13px}
+.stk-live th,.stk-live td{padding:5px 4px;border-bottom:1px solid var(--line);text-align:right}
+.stk-live th:first-child,.stk-live td:first-child{text-align:left}
+.stk-live tfoot td{font-weight:700;border-bottom:0}
+@media (max-width:1000px){.stk-body{grid-template-columns:1fr}}
 .pg{display:inline-block;font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--brand);color:var(--brand-ink);white-space:nowrap}
 .pg.paid{background:var(--high-bg);color:var(--high)}
 tr.prog td{background:color-mix(in srgb,var(--brand) 6%,var(--sunk))}
@@ -246,7 +254,7 @@ html{scroll-behavior:smooth}
         <span class="xmsg" id="xmsg" role="status"></span>
         <span class="count" id="fcount"></span>
       </div>
-      <div class="table-box tall"><table><thead><tr><th class="l">Fecha</th><th class="l">Pedido</th><th class="l">Documento</th><th class="l">Modelo</th><th class="l" id="th-ase">Asesor</th><th class="l">Cliente</th><th>US$</th></tr></thead><tbody id="tb-vin"></tbody><tfoot id="tf-vin"></tfoot></table></div>
+      <div class="table-box tall"><table><thead><tr><th class="l">Fecha</th><th class="l">Pedido</th><th class="l">Documento</th><th class="l">Modelo</th><th class="l" id="th-ase">Asesor</th><th class="l">Cliente</th><th>Importe (S/)</th></tr></thead><tbody id="tb-vin"></tbody><tfoot id="tf-vin"></tfoot></table></div>
     </div>
   </section>
 
@@ -272,13 +280,19 @@ html{scroll-behavior:smooth}
     <div class="panel" id="stk-panel" hidden>
       <div class="panel-head"><h3 id="stk-title">Stock HDP</h3><div class="tools"><span class="note" id="stk-note"></span><button type="button" class="xls" id="stk-save">Guardar stock</button><button type="button" class="lnk" id="stk-close">Cerrar</button></div></div>
       <p class="note" style="margin:0">Unidades que Honda entrega en el mes, por modelo y color. Se asignan a los clientes con el anticipo más antiguo primero.</p>
-      <div class="stk-grid" id="stk-grid"></div>
+      <div class="stk-body">
+        <div class="stk-grid" id="stk-grid"></div>
+        <div class="stk-side">
+          <h4>Mientras cargás</h4>
+          <table class="stk-live"><thead><tr><th class="l">Modelo</th><th>Unid.</th><th>Prog.</th><th>Proyectado (S/)</th></tr></thead><tbody id="stk-live-tb"></tbody><tfoot id="stk-live-tf"></tfoot></table>
+        </div>
+      </div>
       <span class="xmsg" id="stk-msg" role="status"></span>
     </div>
 
     <div class="panel">
       <div class="panel-head"><h3>Resumen por modelo</h3><div class="tools"><span class="note">Haz clic en un modelo para ver sus pedidos</span><button type="button" class="lnk" id="expall">Desplegar todo</button></div></div>
-      <div class="table-box flow"><table style="min-width:900px"><thead><tr><th class="l">Modelo</th><th>Motos</th><th>Stock HDP</th><th>Cobradas 100%</th><th>Valor neto</th><th>Cobrado</th><th>Saldo</th><th>Proyectado</th><th>% cobrado</th></tr></thead><tbody id="tb-amod"></tbody><tfoot id="tf-amod"></tfoot></table></div>
+      <div class="table-box flow"><table style="min-width:900px"><thead><tr><th class="l">Modelo</th><th>Motos</th><th>Stock HDP</th><th>Cobradas 100%</th><th>Valor neto (S/)</th><th>Cobrado (S/)</th><th>Saldo (S/)</th><th>Proyectado (S/)</th><th>% cobrado</th></tr></thead><tbody id="tb-amod"></tbody><tfoot id="tf-amod"></tfoot></table></div>
     </div>
 
   </section>
@@ -297,7 +311,9 @@ const F = DATA.fact, A = DATA.anticipos;
 const $ = id => document.getElementById(id);
 const f2 = x => x.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const f0 = x => x.toLocaleString("en-US",{maximumFractionDigits:0});
-const usd = x => "$" + f0(x);
+const TC = 3.80;
+const pen = x => "S/ " + f0(x * TC);
+const mny = x => (x * TC).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const pc = x => (x*100).toFixed(1) + "%";
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Set","Oct","Nov","Dic"];
@@ -331,7 +347,7 @@ if(location.hash === "#anticipos") showTab("anticipos");
 /* ===== FACTURACIÓN ===== */
 const totUSD = sum(F,"usd");
 $("f-und").textContent = f0(F.length);
-$("f-usd").textContent = usd(totUSD);
+$("f-usd").textContent = pen(totUSD);
 
 fillSelect($("fa"), [...new Set(F.map(r=>r.ase))].sort().map(v=>({v,t:v})), "Todos");
 fillSelect($("fm"), [...new Set(F.map(r=>r.mod))].sort().map(v=>({v,t:v})), "Todos");
@@ -344,16 +360,16 @@ fillSelect($("fmes"), mesesData.map(v=>({v,t:MESES[+v.slice(5)-1]+" "+v.slice(0,
   const max = rows.length ? rows[0].n : 1;
   $("f-mes-t").textContent = "Motos vendidas por asesor · " + MESES[+mk.slice(5)-1] + " " + mk.slice(0,4);
   $("f-mes-n").textContent = FM.length + " motos";
-  $("f-mes-bars").innerHTML = rows.map(r => `<div class="mb${r.n===max?" top":""}" data-tip="${esc(`<b>${r.name}</b><br>${r.n} motos · ${usd(r.usd)}`)}"><span class="m" title="${esc(r.name)}">${esc(short(r.name))}</span><div class="t"><div class="fill" style="width:${r.n/max*100}%"></div></div><span class="a">${r.n}</span></div>`).join(""); }
+  $("f-mes-bars").innerHTML = rows.map(r => `<div class="mb${r.n===max?" top":""}" data-tip="${esc(`<b>${r.name}</b><br>${r.n} motos · ${pen(r.usd)}`)}"><span class="m" title="${esc(r.name)}">${esc(short(r.name))}</span><div class="t"><div class="fill" style="width:${r.n/max*100}%"></div></div><span class="a">${r.n}</span></div>`).join(""); }
 let vinRows = [];
 function renderVin(){
   const q = $("q").value.trim().toLowerCase(), a = $("fa").value, m = $("fm").value, me = $("fmes").value;
   vinRows = F.filter(r => (!a||r.ase===a) && (!m||r.mod===m) && (!me||r.f.startsWith(me)) &&
     (!q || (r.cli+" "+r.doc+" "+(r.ped||"")).toLowerCase().includes(q))).sort((x,y)=>x.f.localeCompare(y.f) || x.doc.localeCompare(y.doc));
   const tot = sum(vinRows,"usd");
-  $("tb-vin").innerHTML = vinRows.map(r => `<tr><td class="l">${fdate(r.f)}</td><td class="l">${r.ped??"—"}</td><td class="l">${esc(r.doc)}</td><td class="l b">${esc(r.mod)}</td>${a?"":`<td class="l">${esc(short(r.ase))}</td>`}<td class="l cli">${esc(r.cli)}</td><td>${f2(r.usd)}</td></tr>`).join("") || `<tr><td class="l" colspan="${a?6:7}">No hay motos con esos filtros.</td></tr>`;
+  $("tb-vin").innerHTML = vinRows.map(r => `<tr><td class="l">${fdate(r.f)}</td><td class="l">${r.ped??"—"}</td><td class="l">${esc(r.doc)}</td><td class="l b">${esc(r.mod)}</td>${a?"":`<td class="l">${esc(short(r.ase))}</td>`}<td class="l cli">${esc(r.cli)}</td><td>${mny(r.usd)}</td></tr>`).join("") || `<tr><td class="l" colspan="${a?6:7}">No hay motos con esos filtros.</td></tr>`;
   $("th-ase").hidden = !!a;
-  $("tf-vin").innerHTML = `<tr><td class="l" colspan="${a?5:6}">Total filtrado: ${vinRows.length} motos</td><td>${f2(tot)}</td></tr>`;
+  $("tf-vin").innerHTML = `<tr><td class="l" colspan="${a?5:6}">Total filtrado: ${vinRows.length} motos</td><td>${mny(tot)}</td></tr>`;
   $("fcount").textContent = `${vinRows.length} de ${F.length} motos`;
   $("xls").disabled = !vinRows.length; $("xmsg").textContent = "";
 }
@@ -392,7 +408,7 @@ $("xls").addEventListener("click", () => {
   for(let tk=0; tk<=max; tk+=max/4) s += `<line class="gridl" x1="${L}" x2="${W-R}" y1="${y(tk)}" y2="${y(tk)}"/><text x="${L-6}" y="${y(tk)+4}" text-anchor="end">${tk? (tk/1000)+"k":"0"}</text>`;
   vals.forEach((v,i) => {
     const x = L + i*bw + bw*0.16, w = bw*0.68, mi = +v.k.slice(5)-1, h = y(0)-y(v.usd);
-    s += `<g data-tip="${esc(`<b>${MESES[mi]} ${v.k.slice(0,4)}</b><br>${"$"+f2(v.usd)}<br>${v.n} motos`)}"><rect class="hit" x="${L+i*bw}" y="${T-18}" width="${bw}" height="${H-T-B+18}"/>`;
+    s += `<g data-tip="${esc(`<b>${MESES[mi]} ${v.k.slice(0,4)}</b><br>${pen(v.usd)}<br>${v.n} motos`)}"><rect class="hit" x="${L+i*bw}" y="${T-18}" width="${bw}" height="${H-T-B+18}"/>`;
     s += `<path class="barp${v.usd===Math.max(...vals.map(z=>z.usd))?" top":""}" d="M${x},${y(0)} V${y(v.usd)+3} Q${x},${y(v.usd)} ${x+3},${y(v.usd)} H${x+w-3} Q${x+w},${y(v.usd)} ${x+w},${y(v.usd)+3} V${y(0)} Z"/>`;
     s += `<text class="val" x="${x+w/2}" y="${y(v.usd)-6}" text-anchor="middle">${Math.round(v.usd/1000)}k</text>`;
     s += `<text x="${x+w/2}" y="${H-7}" text-anchor="middle">${MESES[mi]}</text></g>`;
@@ -428,9 +444,9 @@ const abiertos = new Set();
 function pgCell(r){ if(!r.u) return "—"; return isFull(r) ? `<span class="pg paid">Programado · pagado</span>` : `<span class="pg">Programado${r.u<r.motos?` (${r.u}/${r.motos})`:""}</span>`; }
 function subTable(g){
   const rows = [...g].sort((x,y)=>x.iso.localeCompare(y.iso) || x.ped-y.ped);
-  return `<table class="subt"><thead><tr><th>Pedido</th><th class="l">1er anticipo</th><th class="l">Cliente</th><th class="l">Asesor</th><th class="l">Color</th><th>Motos</th><th>Precio lista</th><th>Dscto</th><th>Valor neto</th><th>Cobrado</th><th>Pagos</th><th>Saldo</th><th>% cobrado</th><th class="l">Programado</th></tr></thead><tbody>` +
+  return `<table class="subt"><thead><tr><th>Pedido</th><th class="l">1er anticipo</th><th class="l">Cliente</th><th class="l">Asesor</th><th class="l">Color</th><th>Motos</th><th>Precio lista (S/)</th><th>Dscto (S/)</th><th>Valor neto (S/)</th><th>Cobrado (S/)</th><th>Pagos</th><th>Saldo (S/)</th><th>% cobrado</th><th class="l">Programado</th></tr></thead><tbody>` +
     rows.map(r => { const c=Math.min(r.cob,r.valor), p=c/r.valor;
-      return `<tr class="${r.u?"prog":""}"><td class="b" data-tip="${esc("Documentos: "+r.docs)}">${r.ped}</td><td class="l">${r.fecha}</td><td class="l cli">${esc(r.cli)}</td><td class="l">${esc(short(r.ase))}</td><td class="l">${esc(r.color)}</td><td>${r.motos}</td><td>${f2(r.lista)}</td><td>${r.dsc?"−"+f2(r.dsc):"—"}</td><td>${f2(r.valor)}</td><td>${f2(r.cob)}</td><td>${r.pagos}</td><td class="b">${f2(r.saldo)}</td><td>${pc(p)}</td><td class="l">${pgCell(r)}</td></tr>`; }).join("") + `</tbody></table>`;
+      return `<tr class="${r.u?"prog":""}"><td class="b" data-tip="${esc("Documentos: "+r.docs)}">${r.ped}</td><td class="l">${r.fecha}</td><td class="l cli">${esc(r.cli)}</td><td class="l">${esc(short(r.ase))}</td><td class="l">${esc(r.color)}</td><td>${r.motos}</td><td>${mny(r.lista)}</td><td>${r.dsc?"−"+mny(r.dsc):"—"}</td><td>${mny(r.valor)}</td><td>${mny(r.cob)}</td><td>${r.pagos}</td><td class="b">${mny(r.saldo)}</td><td>${pc(p)}</td><td class="l">${pgCell(r)}</td></tr>`; }).join("") + `</tbody></table>`;
 }
 const stockMod = m => Object.entries(stock).filter(([k])=>k.startsWith(m+"|")).reduce((a,[,v])=>a+(+v||0),0);
 function renderSec(){
@@ -438,20 +454,20 @@ function renderSec(){
   const B = base(), V = sum(B,"valor"), C = cobNet(B), S = sum(B,"saldo"), P = sum(B,"proy");
   const pend = B.filter(r=>!isFull(r));
   const prog = B.filter(r=>r.u>0), progPend = prog.filter(r=>!isFull(r)), progPaid = prog.filter(isFull);
-  $("a-val").textContent = usd(V); $("a-mot").textContent = sum(B,"motos") + " motos en " + B.length + " pedidos";
-  $("a-cob").textContent = usd(C); $("a-pct").textContent = (V? pc(C/V):"0.0%") + " del valor neto";
-  $("a-sal").textContent = usd(S); $("a-sals").textContent = (V? pc(S/V):"0.0%") + " del valor neto · " + sum(pend,"motos") + " motos con saldo";
+  $("a-val").textContent = pen(V); $("a-mot").textContent = sum(B,"motos") + " motos en " + B.length + " pedidos";
+  $("a-cob").textContent = pen(C); $("a-pct").textContent = (V? pc(C/V):"0.0%") + " del valor neto";
+  $("a-sal").textContent = pen(S); $("a-sals").textContent = (V? pc(S/V):"0.0%") + " del valor neto · " + sum(pend,"motos") + " motos con saldo";
   $("a-proy-t").textContent = "Saldo proyectado · " + mesLbl($("pm").value);
-  $("a-proy").textContent = dbOk ? usd(P) : "—";
+  $("a-proy").textContent = dbOk ? pen(P) : "—";
   $("a-proys").textContent = !dbOk ? "Conecta el almacén de stock (Vercel Blob) para ver la proyección"
     : prog.length ? `${S? pc(P/S):"0.0%"} del saldo total · ${progPend.length} cliente${progPend.length===1?"":"s"} programado${progPend.length===1?"":"s"}${progPaid.length?` · ${progPaid.length} ya pagado${progPaid.length===1?"":"s"}`:""}`
     : "Sin stock HDP ingresado para este mes";
   $("gcount").textContent = `${B.length} de ${A.length} pedidos`;
   const am = [...group(B, r=>r.mod)].map(([name,g]) => ({name, g, motos:sum(g,"motos"), stk:stockMod(name), full:sum(g.filter(isFull),"motos"), valor:sum(g,"valor"), cob:cobNet(g), saldo:sum(g,"saldo"), proy:sum(g,"proy")})).sort((a,b)=>b.saldo-a.saldo || b.valor-a.valor);
   $("tb-amod").innerHTML = am.map(r => { const p=r.cob/r.valor, open=abiertos.has(r.name);
-    return `<tr class="grp" tabindex="0" data-mod="${esc(r.name)}" aria-expanded="${open}"><td class="l b"><span class="nm"><span class="chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>${esc(r.name)}</span></td><td>${r.motos}</td><td>${r.stk||"—"}</td><td>${r.full||"—"}</td><td>${f2(r.valor)}</td><td>${f2(r.cob)}</td><td class="b">${f2(r.saldo)}</td><td class="b">${r.proy?f2(r.proy):"—"}</td><td>${pc(p)}</td></tr>` +
+    return `<tr class="grp" tabindex="0" data-mod="${esc(r.name)}" aria-expanded="${open}"><td class="l b"><span class="nm"><span class="chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>${esc(r.name)}</span></td><td>${r.motos}</td><td>${r.stk||"—"}</td><td>${r.full||"—"}</td><td>${mny(r.valor)}</td><td>${mny(r.cob)}</td><td class="b">${mny(r.saldo)}</td><td class="b">${r.proy?mny(r.proy):"—"}</td><td>${pc(p)}</td></tr>` +
       (open ? `<tr class="sub"><td colspan="9"><div class="subwrap">${subTable(r.g)}</div></td></tr>` : ""); }).join("") || `<tr><td class="l" colspan="9">No hay anticipos con esos filtros.</td></tr>`;
-  $("tf-amod").innerHTML = `<tr><td class="l">Total</td><td>${sum(B,"motos")}</td><td>${am.reduce((a,r)=>a+r.stk,0)||"—"}</td><td>${sum(B.filter(isFull),"motos")}</td><td>${f2(V)}</td><td>${f2(C)}</td><td>${f2(S)}</td><td>${f2(P)}</td><td>${V?pc(C/V):""}</td></tr>`;
+  $("tf-amod").innerHTML = `<tr><td class="l">Total</td><td>${sum(B,"motos")}</td><td>${am.reduce((a,r)=>a+r.stk,0)||"—"}</td><td>${sum(B.filter(isFull),"motos")}</td><td>${mny(V)}</td><td>${mny(C)}</td><td>${mny(S)}</td><td>${mny(P)}</td><td>${V?pc(C/V):""}</td></tr>`;
   $("expall").textContent = am.length && am.every(r=>abiertos.has(r.name)) ? "Plegar todo" : "Desplegar todo";
   window._mods = am.map(r=>r.name);
 }
@@ -479,18 +495,35 @@ function renderEditor(){
   $("stk-title").textContent = "Stock HDP · " + mes;
   const dis = !dbOk || canWrite === false ? "disabled" : "";
   $("stk-grid").innerHTML = [...group(combos, c=>c.mod)].map(([mod,cs]) =>
-    `<div class="stk-mod"><h4>${esc(mod)}<small>${sum(cs,"n")} en espera</small></h4>` +
+    `<div class="stk-mod"><h4>${esc(mod)}</h4>` +
     cs.map(c => { const id = "stk-" + c.k.replace(/[^\w]+/g,"_");
-      return `<label class="stk-row" for="${id}"><span>${esc(c.color)}</span><span class="w">${c.n} cliente${c.n===1?"":"s"}</span><input id="${id}" type="number" min="0" step="1" inputmode="numeric" data-k="${esc(c.k)}" value="${stock[c.k]??""}" placeholder="0" ${dis}></label>`; }).join("") + `</div>`).join("");
+      return `<label class="stk-row" for="${id}"><span>${esc(c.color)}</span><input id="${id}" type="number" min="0" step="1" inputmode="numeric" data-k="${esc(c.k)}" value="${stock[c.k]??""}" placeholder="0" ${dis}></label>`; }).join("") + `</div>`).join("");
   $("stk-save").hidden = !!dis;
+  renderLive();
   $("stk-note").textContent = !dbOk ? "Almacén de stock no conectado · ver README"
     : canWrite === false ? "Solo lectura: pide permiso de edición al dueño del reporte"
     : stockMeta && stockMeta.updatedAt ? "Última actualización: " + new Date(stockMeta.updatedAt).toLocaleString("es-PE",{dateStyle:"short",timeStyle:"short"}) : "Aún no se ingresó stock para este mes";
 }
+function liveMap(){ const m = {}; document.querySelectorAll("#stk-grid input[data-k]").forEach(inp => { const v = Math.max(0, Math.floor(+inp.value || 0)); if(v) m[inp.dataset.k] = v; }); return m; }
+function renderLive(){
+  const map = liveMap(), res = {};
+  const grupos = group([...A].sort((x,y)=>x.iso.localeCompare(y.iso) || x.ped-y.ped), key);
+  for(const [k,g] of grupos){
+    let rem = Math.max(0, Math.floor(+map[k] || 0));
+    if(!rem) continue;
+    const mod = g[0].mod; if(!res[mod]) res[mod] = {unid:0, clis:0, proy:0};
+    for(const r of g){ if(rem<=0) break; const u = Math.min(rem, r.motos); res[mod].unid += u; res[mod].clis++; res[mod].proy += r.saldo * u / r.motos; rem -= u; }
+  }
+  const mods = Object.keys(res).sort((a,b)=>res[b].proy-res[a].proy);
+  const tot = {unid:0, clis:0, proy:0};
+  $("stk-live-tb").innerHTML = mods.map(m => { const r = res[m]; tot.unid+=r.unid; tot.clis+=r.clis; tot.proy+=r.proy;
+    return `<tr><td class="l">${esc(short(m))}</td><td>${r.unid}</td><td>${r.clis}</td><td>${mny(r.proy)}</td></tr>`; }).join("") || `<tr><td class="l" colspan="4">Todavía no cargás unidades.</td></tr>`;
+  $("stk-live-tf").innerHTML = mods.length ? `<tr><td class="l">Total</td><td>${tot.unid}</td><td>${tot.clis}</td><td>${mny(tot.proy)}</td></tr>` : "";
+}
 function openEditor(on){ $("stk-panel").hidden = !on; $("stk-open").setAttribute("aria-expanded", on); if(on){ renderEditor(); $("stk-msg").textContent=""; } }
 $("stk-open").addEventListener("click", () => openEditor($("stk-panel").hidden));
 $("stk-close").addEventListener("click", () => openEditor(false));
-$("stk-grid").addEventListener("input", e => { const inp = e.target.closest("input[data-k]"); if(!inp) return; stkDirty = true; $("stk-msg").textContent = "Cambios sin guardar"; });
+$("stk-grid").addEventListener("input", e => { const inp = e.target.closest("input[data-k]"); if(!inp) return; stkDirty = true; $("stk-msg").textContent = "Cambios sin guardar"; renderLive(); });
 function stockAlert(o){
   if(typeof Swal !== "undefined") return Swal.fire(o);
   $("stk-msg").textContent = (o.title || "") + (o.text ? " — " + o.text : "");
@@ -553,10 +586,21 @@ db = { doc(path){
       let alive = true, seq = 0;
       const load = () => {
         const my = ++seq;
-        jfetch("/api/stock?mes=" + encodeURIComponent(mes), {}, 15000)
-          .then(r => { if(!r.ok) throw new Error("http"); return r.json(); })
-          .then(d => { if(alive && my === seq){ dbOk = true; cb({exists: !!(d && d.updatedAt), data: () => d}); } })
-          .catch(() => { if(alive && my === seq && eb) eb(); });
+        (async () => {
+          let ok = false;
+          for(let i = 0; i < 3 && !ok; i++){
+            if(i) await new Promise(r => setTimeout(r, i === 1 ? 800 : 2500));
+            if(!alive || my !== seq) return;
+            try{
+              const r = await jfetch("/api/stock?mes=" + encodeURIComponent(mes), {}, 15000);
+              if(!r.ok) continue;
+              const d = await r.json();
+              ok = true;
+              if(alive && my === seq){ dbOk = true; cb({exists: !!(d && d.updatedAt), data: () => d}); }
+            }catch(e){}
+          }
+          if(!ok && alive && my === seq && eb) eb();
+        })();
       };
       load();
       const timer = setInterval(load, 8000);
