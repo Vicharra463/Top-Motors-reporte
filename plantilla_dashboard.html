@@ -491,12 +491,12 @@ $("stk-open").addEventListener("click", () => openEditor($("stk-panel").hidden))
 $("stk-close").addEventListener("click", () => openEditor(false));
 $("stk-grid").addEventListener("input", e => { const inp = e.target.closest("input[data-k]"); if(!inp) return; $("stk-msg").textContent = "Cambios sin guardar"; });
 $("stk-save").addEventListener("click", async () => {
-  if(!dbRef) return;
+  if(!dbRef){ $("stk-msg").textContent = "Recargá la página (Ctrl+Shift+R) e intentá de nuevo."; return; }
   const items = {};
   document.querySelectorAll("#stk-grid input[data-k]").forEach(inp => { const v = Math.max(0, Math.floor(+inp.value || 0)); if(v) items[inp.dataset.k] = v; });
   const btn = $("stk-save"); btn.disabled = true; $("stk-msg").textContent = "Guardando…";
   try{ await dbRef.set({mes: $("pm").value, items, updatedAt: new Date().toISOString()}); $("stk-msg").textContent = "Stock guardado. La proyección ya está actualizada."; }
-  catch(e){ if(e && e.code === "invalid_argument"){ canWrite = false; renderEditor(); $("stk-msg").textContent = "No tienes permiso para guardar el stock."; } else $("stk-msg").textContent = "No se pudo guardar. Inténtalo de nuevo."; }
+  catch(e){ if(e && e.code === "invalid_argument"){ canWrite = false; renderEditor(); $("stk-msg").textContent = "No tienes permiso para guardar el stock."; } else $("stk-msg").textContent = "No se pudo guardar" + (e && e.detail ? " (" + e.detail + ")" : e && e.name === "AbortError" ? " (sin respuesta — timeout)" : ". Inténtalo de nuevo."); }
   finally{ btn.disabled = false; }
 });
 let db = null;
@@ -515,18 +515,30 @@ $("pm").addEventListener("input", () => { watchMonth(); if(!$("stk-panel").hidde
 renderSec();
 /* Stock compartido: /api/stock (Vercel Blob) */
 const stockLoads = new Set();
+function jfetch(url, opts, ms){
+  const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms || 20000);
+  return fetch(url, Object.assign({signal: ac.signal}, opts)).finally(() => clearTimeout(t));
+}
 db = { doc(path){
   const mes = path.replace(/^stock\//, "");
   return {
     async set(data){
-      const r = await fetch("/api/stock", {method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(Object.assign({mes}, data))});
-      if(!r.ok) throw new Error("save");
+      const payload = JSON.stringify(Object.assign({mes}, data));
+      const send = m => jfetch("/api/stock", {method: m, headers:{"Content-Type":"application/json"}, body: payload});
+      let r = null; let netErr = null;
+      try{ r = await send("PUT"); }catch(e){ netErr = e; }
+      if(!r || r.status === 405 || r.status === 501){ try{ r = await send("POST"); }catch(e){ throw netErr || e; } }
+      if(!r.ok){
+        let extra = "";
+        try{ const d = await r.json(); if(d && d.error) extra = " — " + d.error; }catch(e){}
+        throw Object.assign(new Error("save"), {detail: "HTTP " + r.status + extra});
+      }
       stockLoads.forEach(load => load());
     },
     onSnapshot(cb, eb){
       let alive = true;
       const load = () => {
-        fetch("/api/stock?mes=" + encodeURIComponent(mes))
+        jfetch("/api/stock?mes=" + encodeURIComponent(mes), {}, 15000)
           .then(r => { if(!r.ok) throw new Error("http"); return r.json(); })
           .then(d => { if(alive){ dbOk = true; cb({exists: !!(d && d.updatedAt), data: () => d}); } })
           .catch(() => { if(alive && eb) eb(); });

@@ -46,7 +46,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  if (req.method === "PUT") {
+  if (req.method === "PUT" || req.method === "POST") {
     try {
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
       const items = body.items && typeof body.items === "object" ? body.items : {};
