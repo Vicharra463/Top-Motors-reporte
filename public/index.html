@@ -514,20 +514,28 @@ function watchMonth(){
 $("pm").addEventListener("input", () => { watchMonth(); if(!$("stk-panel").hidden) renderEditor(); });
 renderSec();
 /* Stock compartido: /api/stock (Vercel Blob) */
+const stockLoads = new Set();
 db = { doc(path){
   const mes = path.replace(/^stock\//, "");
   return {
     async set(data){
       const r = await fetch("/api/stock", {method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(Object.assign({mes}, data))});
       if(!r.ok) throw new Error("save");
+      stockLoads.forEach(load => load());
     },
     onSnapshot(cb, eb){
       let alive = true;
-      fetch("/api/stock?mes=" + encodeURIComponent(mes))
-        .then(r => { if(!r.ok) throw new Error("http"); return r.json(); })
-        .then(d => { if(alive) cb({exists: !!(d && d.updatedAt), data: () => d}); })
-        .catch(() => { if(alive && eb) eb(); });
-      return () => { alive = false; };
+      const load = () => {
+        fetch("/api/stock?mes=" + encodeURIComponent(mes))
+          .then(r => { if(!r.ok) throw new Error("http"); return r.json(); })
+          .then(d => { if(alive){ dbOk = true; cb({exists: !!(d && d.updatedAt), data: () => d}); } })
+          .catch(() => { if(alive && eb) eb(); });
+      };
+      load();
+      const timer = setInterval(load, 8000);
+      const off = () => { alive = false; clearInterval(timer); stockLoads.delete(load); };
+      stockLoads.add(load);
+      return off;
     }
   };
 }};
