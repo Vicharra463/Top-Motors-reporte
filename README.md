@@ -46,6 +46,18 @@ python actualizar_dashboard.py --ventas datos/analisis.xlsx --pedidos datos/pedi
 
 Abre `index.html` en el navegador.
 
+## Stock HDP editable (Vercel)
+
+La edición del stock y la proyección de cobro se guardan en **Vercel Blob** vía el endpoint `/api/stock` (cuando la página se sirve en Vercel). Activación (una sola vez):
+
+1. En el dashboard de Vercel: **Storage → Create Store → Blob** (nombre libre, plan Hobby alcanza).
+2. **Connect to Project** → elegir este proyecto (inyecta `BLOB_READ_WRITE_TOKEN` solo).
+3. **Redeploy** el proyecto.
+
+Después de eso, "Editar Stock HDP" guarda y lee en el almacén compartido: todos los que abran el enlace ven la misma proyección. En GitHub Pages (sin API) el botón queda en solo lectura con aviso.
+
+Nota de seguridad: el endpoint de guardado no tiene autenticación (cualquiera con el enlace puede editar el stock). Si querés protegerlo, agregamos una clave compartida.
+
 ## Editar precios, excepciones o modelo de un SKU
 
 Todo lo de negocio vive en la sección **CONFIGURACIÓN** de `actualizar_dashboard.py`:
